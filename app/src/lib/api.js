@@ -4,14 +4,16 @@
 // callback nunca se disparaba (aunque el servidor terminara bien).
 const BASE_URL = 'https://script.google.com/macros/s/AKfycbyhjnuRIVAKueg33iWG41RTzhrMxNBVy3o0-t1Bfd9T7YlTHC87Mg4N_9rAB3vChMs2XA/exec';
 
-// Leer los 3 calendarios (sala + 2 abogadas) del lado del servidor puede
-// tardar bastante en Apps Script, sobre todo la primera carga después de
-// que venció el caché del servidor. Un fetch() sin límite se puede quedar
-// esperando casi indefinidamente si Google tarda de más -- por eso se le
-// pone un tope duro y, si se cumple, se reintenta una vez antes de avisar
-// error (la ejecución abandonada en el servidor sigue corriendo igual y
-// deja el caché listo para el reintento).
-const TIMEOUT_MS = 20000;
+// El backend ya no calcula nada en vivo (getAvailableSlots en Codigo.gs lee
+// un snapshot precalculado): confirmado en el log de Ejecuciones que
+// responde siempre en <1s. Lo que sigue fallando de forma intermitente es
+// la capa de entrega de Google (el redirect de script.google.com hacia el
+// servidor real), que a veces devuelve 404/503 aunque el script ya haya
+// terminado bien -- eso se compensa reintentando rápido varias veces, no
+// esperando más por intento.
+const TIMEOUT_MS = 8000;
+const MAX_INTENTOS = 6;
+const ESPERA_ENTRE_INTENTOS_MS = 300;
 
 async function fetchConTimeout(url, options) {
   const controller = new AbortController();
@@ -28,20 +30,17 @@ function esperar_(ms) {
 }
 
 export async function getAvailableSlots() {
-  // Apps Script (y el hop interno a script.googleusercontent.com que usa
-  // para servir la respuesta) puede fallar de forma intermitente incluso
-  // cuando la ejecución del lado del servidor termina bien -- por eso vale
-  // la pena reintentar más de una vez en vez de rendirse al primer error.
   let ultimoError;
-  for (let intento = 0; intento < 3; intento++) {
+  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
     try {
       const res = await fetchConTimeout(`${BASE_URL}?api=slots`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.message || 'No se pudieron cargar los turnos.');
       return data.dias;
     } catch (err) {
       ultimoError = err;
-      if (intento < 2) await esperar_(1000);
+      if (intento < MAX_INTENTOS - 1) await esperar_(ESPERA_ENTRE_INTENTOS_MS);
     }
   }
   throw ultimoError;

@@ -25,7 +25,7 @@ export default function App() {
     setEstado('cargando');
     tardandoTimer.current = setTimeout(() => {
       setEstado((actual) => (actual === 'cargando' ? 'tardando' : actual));
-    }, 15000);
+    }, 4000);
 
     getAvailableSlots()
       .then((resultadoDias) => {
