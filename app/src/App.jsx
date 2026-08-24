@@ -87,7 +87,7 @@ export default function App() {
 
         <p className="subtitulo">Elegí el día y horario que prefieras.</p>
         <div id="lista-dias">
-          <ListaDias estado={estado} dias={dias} slotSeleccionado={slotSeleccionado} onSelect={seleccionarSlot} />
+          <ListaDias estado={estado} dias={dias} slotSeleccionado={slotSeleccionado} onSelect={seleccionarSlot} onReintentar={cargarDisponibilidad} />
         </div>
 
         {slotSeleccionado && (

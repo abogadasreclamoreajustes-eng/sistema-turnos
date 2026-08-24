@@ -1,12 +1,17 @@
-export default function ListaDias({ estado, dias, slotSeleccionado, onSelect }) {
+export default function ListaDias({ estado, dias, slotSeleccionado, onSelect, onReintentar }) {
   if (estado === 'cargando') {
     return <p className="cargando">Buscando horarios disponibles...</p>;
   }
   if (estado === 'error') {
-    return <p className="cargando">Ocurrió un error al cargar los turnos. Recargá la página.</p>;
+    return (
+      <div className="cargando">
+        <p>No pudimos cargar los turnos disponibles.</p>
+        <button type="button" className="slot-btn" onClick={onReintentar}>Reintentar</button>
+      </div>
+    );
   }
   if (estado === 'tardando') {
-    return <p className="cargando">Esto está tardando más de lo normal. Escribinos directamente y te ayudamos a coordinar tu turno.</p>;
+    return <p className="cargando">Esto está tardando más de lo normal, pero seguimos intentando...</p>;
   }
   if (!dias || dias.length === 0) {
     return <p className="cargando">No hay turnos disponibles en este momento. Escribinos directamente y te ayudamos a coordinar.</p>;
