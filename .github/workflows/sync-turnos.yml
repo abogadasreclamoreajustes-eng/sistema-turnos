@@ -1,0 +1,88 @@
+name: Sincronizar turnos disponibles
+
+# Este workflow es la solución al problema de lentitud: script.google.com/exec
+# (la puerta de entrada de Apps Script) es intermitentemente lento -- a veces
+# responde en <1s, a veces tarda 15-20s+ sin responder nada, por una capa de
+# Google que está fuera de nuestro control (confirmado empíricamente, no es
+# el script en sí: Codigo.gs ya responde siempre en <1s porque lee un
+# snapshot precalculado, nunca calcula en vivo en este camino).
+#
+# En vez de que cada cliente que abre la página pague esa lentitud, este
+# robot (que corre en la infraestructura de GitHub, nadie lo espera mirando
+# una pantalla) le pregunta a Apps Script cada 5 minutos con paciencia y dej
+# guardada la respuesta como archivo estático (turnos.json) en el propio
+# sitio. La página de reserva lee ESE archivo primero (instantáneo, mismo
+# origen, sin pasar por Google) y solo si no está disponible cae al pedido
+# directo a Apps Script como respaldo (ver app/src/lib/api.js).
+#
+# No hace falta ningún secreto/token nuevo: usa el GITHUB_TOKEN automático
+# del repo, ya con permiso de escritura (ver "permissions" abajo).
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-turnos
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Descargar disponibilidad desde Apps Script (con reintentos pacientes)
+        id: fetch
+        run: |
+          set -e
+          URL="https://script.google.com/macros/s/AKfycbyhjnuRIVAKueg33iWG41RTzhrMxNBVy3o0-t1Bfd9T7YlTHC87Mg4N_9rAB3vChMs2XA/exec?api=slots"
+          INTENTOS=6
+          OK=0
+          for i in $(seq 1 $INTENTOS); do
+            echo "Intento $i de $INTENTOS..."
+            HTTP_CODE=$(curl -sL --max-time 25 -o /tmp/respuesta.json -w "%{http_code}" "$URL" || echo "000")
+            if [ "$HTTP_CODE" = "200" ] && grep -q '"ok":true' /tmp/respuesta.json 2>/dev/null; then
+              OK=1
+              echo "Respuesta OK en el intento $i."
+              break
+            fi
+            echo "Intento $i falló (HTTP $HTTP_CODE). Esperando antes de reintentar..."
+            sleep 8
+          done
+
+          if [ "$OK" != "1" ]; then
+            echo "No se pudo obtener disponibilidad fresca tras $INTENTOS intentos. Se deja el turnos.json existente sin tocar (mejor un dato un poco viejo que romper el archivo)."
+            echo "actualizado=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          GENERATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('/tmp/respuesta.json', 'utf8'));
+            data.generatedAt = '$GENERATED_AT';
+            const out = JSON.stringify(data);
+            fs.writeFileSync('turnos.json', out);
+            fs.mkdirSync('app/public', { recursive: true });
+            fs.writeFileSync('app/public/turnos.json', out);
+          "
+          echo "actualizado=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commitear si cambió
+        if: steps.fetch.outputs.actualizado == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- turnos.json app/public/turnos.json; then
+            echo "Sin cambios en la disponibilidad, no se commitea nada."
+            exit 0
+          fi
+          git add turnos.json app/public/turnos.json
+          git commit -m "Actualizar snapshot de turnos disponibles [skip ci]"
+          git push
