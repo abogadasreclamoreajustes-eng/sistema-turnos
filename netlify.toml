@@ -1,0 +1,16 @@
+[build]
+  command = "cd app && npm run build"
+  publish = "app/dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# El cliente (app/src/lib/api.js) pide "turnos.json" en el mismo origen --
+# esta regla lo redirige de forma invisible a la función que sirve el
+# snapshot cacheado en Netlify Blobs, sin que haga falta tocar el código del
+# front. Ver netlify/functions/turnos.mts y turnos-sync.mts.
+[[redirects]]
+  from = "/turnos.json"
+  to = "/.netlify/functions/turnos"
+  status = 200
