@@ -23,9 +23,17 @@ async function fetchConTimeout(url, options) {
   }
 }
 
+function esperar_(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function getAvailableSlots() {
+  // Apps Script (y el hop interno a script.googleusercontent.com que usa
+  // para servir la respuesta) puede fallar de forma intermitente incluso
+  // cuando la ejecución del lado del servidor termina bien -- por eso vale
+  // la pena reintentar más de una vez en vez de rendirse al primer error.
   let ultimoError;
-  for (let intento = 0; intento < 2; intento++) {
+  for (let intento = 0; intento < 3; intento++) {
     try {
       const res = await fetchConTimeout(`${BASE_URL}?api=slots`);
       const data = await res.json();
@@ -33,6 +41,7 @@ export async function getAvailableSlots() {
       return data.dias;
     } catch (err) {
       ultimoError = err;
+      if (intento < 2) await esperar_(1000);
     }
   }
   throw ultimoError;
