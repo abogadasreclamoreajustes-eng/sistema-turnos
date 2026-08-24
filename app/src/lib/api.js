@@ -12,7 +12,7 @@ const BASE_URL = 'https://script.google.com/macros/s/AKfycbyhjnuRIVAKueg33iWG41R
 // terminado bien -- eso se compensa reintentando rápido varias veces, no
 // esperando más por intento.
 const TIMEOUT_MS = 8000;
-const MAX_INTENTOS = 6;
+const MAX_INTENTOS = 10;
 const ESPERA_ENTRE_INTENTOS_MS = 300;
 
 async function fetchConTimeout(url, options) {
