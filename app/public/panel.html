@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel interno - Turnos Rosario</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --lila: #cfcfcf;
+        --violeta: #3f3f3f;
+        --negro: #1a1a1a;
+        --blanco: #ffffff;
+        --gris: #6b6b6b;
+        --amarillo-bg: #FBF1D6;
+        --amarillo-borde: #E3C878;
+        --amarillo-texto: #8A6A1F;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: 'Red Hat Display', Arial, sans-serif;
+        background: var(--blanco);
+        color: var(--negro);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px 16px;
+      }
+      .card {
+        max-width: 440px;
+        width: 100%;
+        background: var(--blanco);
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 18px;
+        padding: 32px 28px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+        text-align: center;
+      }
+      p.eyebrow { color: var(--gris); font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 10px 0; }
+      h1 { font-weight: 700; font-size: 22px; margin: 0 0 12px 0; }
+      p.desc { color: var(--gris); font-size: 14px; line-height: 1.5; margin: 0 0 26px 0; }
+      .btn {
+        display: block;
+        width: 100%;
+        padding: 14px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+        background: var(--negro);
+        color: var(--blanco);
+        border: 1px solid var(--negro);
+        margin-bottom: 12px;
+      }
+      .btn:hover { opacity: 0.85; }
+      .btn-outline { background: var(--blanco); color: var(--negro); border: 1px solid rgba(0,0,0,0.18); }
+      .ayuda {
+        margin-top: 22px;
+        text-align: left;
+        background: var(--amarillo-bg);
+        border: 1px solid var(--amarillo-borde);
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 12.5px;
+        color: var(--amarillo-texto);
+        line-height: 1.6;
+      }
+      .ayuda b { color: var(--negro); }
+      code {
+        background: rgba(0,0,0,0.06);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p class="eyebrow">Turnos Rosario</p>
+      <h1>Panel interno de gestión</h1>
+      <p class="desc">Solo para Brenda, Evelyn y Virginia. Necesitás estar logueada con tu cuenta de Google autorizada.</p>
+
+      <a class="btn" id="btn-elegir-cuenta" href="#">Abrir panel (elegir cuenta)</a>
+      <a class="btn btn-outline" id="btn-directo" href="#" target="_blank" rel="noopener">Abrir directo</a>
+
+      <div class="ayuda">
+        <b>¿Te aparece "No se pudo abrir el archivo" o una pantalla de Google Drive?</b><br>
+        Es un bug conocido de Chrome cuando el navegador tiene más de una cuenta de Google: a veces mete un <code>/u/1/</code> o <code>/u/2/</code> de más en la dirección. Solución: usá el botón "elegir cuenta" de arriba, o borrá manualmente ese segmento de la barra de direcciones y apretá Enter.
+      </div>
+    </div>
+
+    <script>
+      var PANEL_URL = 'https://script.google.com/macros/s/AKfycbzRjhskoznfYXFZ8sqXsyF7l9f2cE0e8QMfJa6zj8X8R5ZWpFlRtzmy9mBmfQmiSrDPQA/exec?panel=admin';
+      var elegirCuentaUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(PANEL_URL);
+      document.getElementById('btn-elegir-cuenta').href = elegirCuentaUrl;
+      document.getElementById('btn-elegir-cuenta').target = '_blank';
+      document.getElementById('btn-elegir-cuenta').rel = 'noopener';
+      document.getElementById('btn-directo').href = PANEL_URL;
+    </script>
+  </body>
+</html>

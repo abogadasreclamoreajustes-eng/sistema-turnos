@@ -13,14 +13,25 @@ const BASE_URL = 'https://script.google.com/macros/s/AKfycbyhjnuRIVAKueg33iWG41R
 // reintento del lado del cliente lo arregla del todo, solo lo disimula a
 // costa de que el cliente espere más.
 //
-// SOLUCIÓN: un workflow de GitHub Actions (.github/workflows/sync-turnos.yml)
-// le pregunta a Apps Script cada 5 minutos, con paciencia, y deja la
-// respuesta guardada como archivo estático (turnos.json) en el mismo sitio.
-// Acá se lee PRIMERO ese archivo -- mismo origen, sin pasar por Google,
-// prácticamente instantáneo -- y solo si no está disponible (sitio recién
-// desplegado, antes del primer ciclo del robot, o el robot no pudo
-// actualizar por 20+ min seguidos) se cae al pedido directo de siempre como
+// SOLUCIÓN para la CARGA de turnos: una función programada de Netlify
+// (netlify/functions/turnos-sync.mts) le pregunta a Apps Script cada 5
+// minutos, con paciencia, y deja la respuesta guardada en Netlify Blobs.
+// Otra función (turnos.mts) la sirve al instante en "turnos.json" (mismo
+// origen, sin pasar por Google). Acá se lee PRIMERO ese archivo y solo si
+// no está disponible o está viejo se cae al pedido directo de siempre como
 // respaldo, para que la página nunca quede sin datos.
+//
+// La RESERVA (bookSlot, más abajo) sufre el mismo problema de entrega --
+// confirmado en una prueba real (2026-08-25): el turno se guardó
+// perfectamente en Calendar/Sheets del lado del servidor, pero la respuesta
+// nunca llegó al navegador y la persona vio "Ocurrió un error" como si no
+// hubiera pasado nada. No se puede resolver con un snapshot estático (es
+// una escritura, tiene que ir en vivo), así que acá sí hace falta reintentar
+// -- con cuidado: si el primer intento en realidad tuvo éxito del lado del
+// servidor, un reintento choca con el lock de Apps Script y devuelve "Ese
+// turno se acaba de ocupar" (mismo mensaje que si alguien más lo hubiera
+// tomado) -- por eso ese mensaje se aclara más abajo cuando ya hubo al
+// menos un fallo de red antes.
 const STATIC_URL = `${import.meta.env.BASE_URL}turnos.json`;
 const STATIC_TIMEOUT_MS = 3500;
 const STATIC_MAX_EDAD_MIN = 20; // más viejo que esto -> no confiar, usar el respaldo en vivo
@@ -82,14 +93,40 @@ export async function getAvailableSlots() {
   return getAvailableSlotsEnVivo_();
 }
 
+const BOOK_TIMEOUT_MS = 10000;
+const BOOK_MAX_INTENTOS = 3;
+const BOOK_ESPERA_ENTRE_INTENTOS_MS = 500;
+const MENSAJE_OCUPADO_TRAS_FALLO_RED =
+  'Ese horario ya no está disponible. Si fuiste vos quien lo reservó recién y la confirmación tardó en llegar, revisá tu email antes de elegir otro turno.';
+const MENSAJE_SIN_CONFIRMACION =
+  'No pudimos confirmar la respuesta del servidor. Antes de intentar de nuevo, revisá tu email: si la reserva se guardó igual, te va a llegar una confirmación automática.';
+
 export async function bookSlot(payload) {
-  // Content-Type text/plain (no application/json): así el navegador manda
-  // la solicitud como "simple request" y no dispara un preflight CORS, que
-  // Apps Script no sabe responder (no implementa doOptions).
-  const res = await fetchConTimeout(`${BASE_URL}?api=book`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  return res.json();
+  let huboFalloDeRed = false;
+
+  for (let intento = 0; intento < BOOK_MAX_INTENTOS; intento++) {
+    try {
+      // Content-Type text/plain (no application/json): así el navegador manda
+      // la solicitud como "simple request" y no dispara un preflight CORS, que
+      // Apps Script no sabe responder (no implementa doOptions).
+      const res = await fetchConTimeout(`${BASE_URL}?api=book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }, BOOK_TIMEOUT_MS);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+      if (!data.ok && huboFalloDeRed && /se acaba de ocupar/i.test(data.message || '')) {
+        return { ...data, message: MENSAJE_OCUPADO_TRAS_FALLO_RED };
+      }
+      return data;
+    } catch (err) {
+      huboFalloDeRed = true;
+      if (intento === BOOK_MAX_INTENTOS - 1) {
+        return { ok: false, message: MENSAJE_SIN_CONFIRMACION };
+      }
+      await esperar_(BOOK_ESPERA_ENTRE_INTENTOS_MS);
+    }
+  }
 }
