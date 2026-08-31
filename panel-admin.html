@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel de turnos - Gestión interna</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --lila: #C4B5D5;
+      --violeta: #4b2e83;
+      --negro: #1a1a1a;
+      --blanco: #ffffff;
+      --gris: #6b6b6b;
+      --verde: #3f8f5f;
+      --rojo: #b03434;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Red Hat Display', Arial, sans-serif;
+      background: #f7f6fa;
+      color: var(--negro);
+      margin: 0;
+      padding: 28px 16px 60px;
+    }
+    .contenedor { max-width: 720px; margin: 0 auto; }
+    .encabezado {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 20px; font-weight: 700; color: var(--violeta); margin: 0 0 4px 0; }
+    p.sub { color: var(--gris); font-size: 13px; margin: 0; }
+    button.actualizar {
+      background: var(--blanco);
+      border: 1px solid rgba(75,46,131,0.25);
+      color: var(--violeta);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    button.actualizar:hover { background: rgba(75,46,131,0.06); }
+    .turno-card {
+      background: var(--blanco);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .turno-info { flex: 1; min-width: 220px; }
+    .turno-fecha { font-weight: 700; font-size: 14px; color: var(--negro); }
+    .turno-detalle { font-size: 13px; color: var(--gris); margin-top: 4px; line-height: 1.5; }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 999px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge-reservado { background: rgba(196,181,213,0.4); color: var(--violeta); }
+    .badge-confirmada { background: rgba(63,143,95,0.15); color: var(--verde); }
+    .acciones { display: flex; gap: 8px; flex-shrink: 0; }
+    button.btn { font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 9px 14px; border: none; cursor: pointer; white-space: nowrap; }
+    .btn-confirmar { background: var(--violeta); color: var(--blanco); }
+    .btn-confirmar:disabled { opacity: 0.5; cursor: default; }
+    .btn-liberar { background: var(--blanco); color: var(--rojo); border: 1px solid rgba(176,52,52,0.3); }
+    .cargando, .vacio { text-align: center; color: var(--gris); padding: 48px 0; font-size: 14px; }
+    .error-acceso { text-align: center; color: var(--rojo); padding: 60px 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="contenedor">
+    <div class="encabezado">
+      <div>
+        <h1>Turnos presenciales · Rosario</h1>
+        <p class="sub">Marcá los turnos confirmados o liberá los que se cancelen.</p>
+      </div>
+      <button class="actualizar" onclick="cargar()">↻ Actualizar</button>
+    </div>
+    <div id="lista">
+      <p class="cargando">Cargando turnos...</p>
+    </div>
+  </div>
+
+  <script>
+    // Página estática (GitHub Pages) -- ya no depende de que el navegador
+    // "abra" nada dentro de Google (eso era lo que fallaba con la cuenta de
+    // Evelyn: Google Drive intentaba resolver el archivo del proyecto de
+    // Apps Script bajo la cuenta activa del navegador y a veces no podía).
+    // Acá solo se hacen llamadas fetch() de fondo al mismo backend, igual
+    // que ya hace la página pública de turnos -- eso nunca falló.
+    const BASE_URL = 'https://script.google.com/macros/s/AKfycbzRjhskoznfYXFZ8sqXsyF7l9f2cE0e8QMfJa6zj8X8R5ZWpFlRtzmy9mBmfQmiSrDPQA/exec';
+    const TOKEN = '03f0fa645faa4c9a95e05a44';
+    const TIMEOUT_MS = 8000;
+    const MAX_INTENTOS = 6;
+
+    function esperar_(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+    async function fetchConTimeout(url, options) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchConReintentos_(url, options) {
+      let ultimoError;
+      for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+        try {
+          const res = await fetchConTimeout(url, options);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.json();
+        } catch (err) {
+          ultimoError = err;
+          if (intento < MAX_INTENTOS - 1) await esperar_(300);
+        }
+      }
+      throw ultimoError;
+    }
+
+    function cargar() {
+      document.getElementById('lista').innerHTML = '<p class="cargando">Cargando turnos...</p>';
+      fetchConReintentos_(`${BASE_URL}?api=admin_list&token=${encodeURIComponent(TOKEN)}`)
+        .then(mostrar)
+        .catch(mostrarError);
+    }
+
+    function mostrar(resultado) {
+      const lista = document.getElementById('lista');
+      if (!resultado.ok) {
+        lista.innerHTML = '<p class="error-acceso">' + (resultado.message || 'Acceso no autorizado.') + '</p>';
+        return;
+      }
+      if (!resultado.reservas.length) {
+        lista.innerHTML = '<p class="vacio">No hay turnos próximos por confirmar.</p>';
+        return;
+      }
+      lista.innerHTML = '';
+      resultado.reservas.forEach(function (r) {
+        const card = document.createElement('div');
+        card.className = 'turno-card';
+
+        const info = document.createElement('div');
+        info.className = 'turno-info';
+        const badgeClass = r.estado === 'Confirmada' ? 'badge-confirmada' : 'badge-reservado';
+        info.innerHTML =
+          '<span class="turno-fecha">' + r.fecha + ' · ' + r.hora + ' hs' +
+          '<span class="badge ' + badgeClass + '">' + r.estado + '</span></span>' +
+          '<div class="turno-detalle">' + r.cliente + ' · ' + r.telefono + '<br>' +
+          r.motivo + ' · Atiende: ' + r.abogada + '</div>';
+        card.appendChild(info);
+
+        const acciones = document.createElement('div');
+        acciones.className = 'acciones';
+
+        const btnConfirmar = document.createElement('button');
+        btnConfirmar.className = 'btn btn-confirmar';
+        btnConfirmar.textContent = r.estado === 'Confirmada' ? 'Confirmada ✓' : 'Confirmar';
+        btnConfirmar.disabled = r.estado === 'Confirmada';
+        btnConfirmar.onclick = function () { confirmar(r.eventId, btnConfirmar); };
+        acciones.appendChild(btnConfirmar);
+
+        const btnLiberar = document.createElement('button');
+        btnLiberar.className = 'btn btn-liberar';
+        btnLiberar.textContent = 'Liberar turno';
+        btnLiberar.onclick = function () { liberar(r.eventId, r.cliente); };
+        acciones.appendChild(btnLiberar);
+
+        card.appendChild(acciones);
+        lista.appendChild(card);
+      });
+    }
+
+    function confirmar(eventId, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      fetchConReintentos_(`${BASE_URL}?api=admin_confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ eventId, token: TOKEN })
+      })
+        .then(function () { cargar(); })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Confirmar';
+          alert('No se pudo confirmar. Probá de nuevo.');
+        });
+    }
+
+    function liberar(eventId, nombre) {
+      if (!confirm('¿Liberar el turno de ' + nombre + '? El horario vuelve a quedar disponible y se avisa al cliente por email.')) return;
+      fetchConReintentos_(`${BASE_URL}?api=admin_free`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ eventId, token: TOKEN })
+      })
+        .then(function () { cargar(); })
+        .catch(function () { alert('No se pudo liberar el turno. Probá de nuevo.'); });
+    }
+
+    function mostrarError() {
+      document.getElementById('lista').innerHTML = '<p class="error-acceso">Ocurrió un error al cargar los turnos. Recargá la página.</p>';
+    }
+
+    cargar();
+  </script>
+</body>
+</html>
