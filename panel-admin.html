@@ -107,14 +107,28 @@
     // que ya hace la página pública de turnos -- eso nunca falló.
     const BASE_URL = 'https://script.google.com/macros/s/AKfycbzRjhskoznfYXFZ8sqXsyF7l9f2cE0e8QMfJa6zj8X8R5ZWpFlRtzmy9mBmfQmiSrDPQA/exec';
     const TOKEN = '03f0fa645faa4c9a95e05a44';
+    // Leer la lista es una simple lectura de planilla: rápido, así que vale
+    // la pena reintentar seguido con un timeout corto.
     const TIMEOUT_MS = 8000;
     const MAX_INTENTOS = 6;
+    // Confirmar/Liberar además borran o tocan un evento de Calendar, que
+    // puede tardar mucho más (se vieron casos reales de 10-38s). Con un
+    // timeout corto acá, el navegador se rendía y reintentaba mientras el
+    // pedido anterior seguía corriendo en el servidor -- varios reintentos
+    // compitiendo por el mismo evento hacían que TODOS terminaran fallando
+    // (así quedó un turno cancelado por Virginia sin borrarse del Calendar
+    // real, sin que nadie se enterara). El backend ahora es idempotente
+    // (repetir la misma acción no hace nada raro si ya se había aplicado),
+    // así que acá alcanza con pocos reintentos pero con mucho más margen
+    // de tiempo cada uno.
+    const WRITE_TIMEOUT_MS = 45000;
+    const WRITE_MAX_INTENTOS = 2;
 
     function esperar_(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-    async function fetchConTimeout(url, options) {
+    async function fetchConTimeout(url, options, timeoutMs) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         return await fetch(url, { ...options, signal: controller.signal });
       } finally {
@@ -122,16 +136,18 @@
       }
     }
 
-    async function fetchConReintentos_(url, options) {
+    async function fetchConReintentos_(url, options, config) {
+      const timeoutMs = (config && config.timeoutMs) || TIMEOUT_MS;
+      const maxIntentos = (config && config.maxIntentos) || MAX_INTENTOS;
       let ultimoError;
-      for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+      for (let intento = 0; intento < maxIntentos; intento++) {
         try {
-          const res = await fetchConTimeout(url, options);
+          const res = await fetchConTimeout(url, options, timeoutMs);
           if (!res.ok) throw new Error('HTTP ' + res.status);
           return await res.json();
         } catch (err) {
           ultimoError = err;
-          if (intento < MAX_INTENTOS - 1) await esperar_(300);
+          if (intento < maxIntentos - 1) await esperar_(300);
         }
       }
       throw ultimoError;
@@ -182,7 +198,7 @@
         const btnLiberar = document.createElement('button');
         btnLiberar.className = 'btn btn-liberar';
         btnLiberar.textContent = 'Liberar turno';
-        btnLiberar.onclick = function () { liberar(r.eventId, r.cliente); };
+        btnLiberar.onclick = function () { liberar(r.eventId, r.cliente, btnLiberar); };
         acciones.appendChild(btnLiberar);
 
         card.appendChild(acciones);
@@ -197,24 +213,30 @@
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ eventId, token: TOKEN })
-      })
+      }, { timeoutMs: WRITE_TIMEOUT_MS, maxIntentos: WRITE_MAX_INTENTOS })
         .then(function () { cargar(); })
         .catch(function () {
           btn.disabled = false;
           btn.textContent = 'Confirmar';
-          alert('No se pudo confirmar. Probá de nuevo.');
+          alert('No se pudo confirmar. Probá de nuevo -- si ya lo habías confirmado antes, puede que sí se haya guardado: actualizá la lista para revisar.');
         });
     }
 
-    function liberar(eventId, nombre) {
+    function liberar(eventId, nombre, btn) {
       if (!confirm('¿Liberar el turno de ' + nombre + '? El horario vuelve a quedar disponible y se avisa al cliente por email.')) return;
+      btn.disabled = true;
+      btn.textContent = 'Liberando...';
       fetchConReintentos_(`${BASE_URL}?api=admin_free`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ eventId, token: TOKEN })
-      })
+      }, { timeoutMs: WRITE_TIMEOUT_MS, maxIntentos: WRITE_MAX_INTENTOS })
         .then(function () { cargar(); })
-        .catch(function () { alert('No se pudo liberar el turno. Probá de nuevo.'); });
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Liberar turno';
+          alert('No se pudo liberar el turno -- si ya lo habías liberado antes, puede que sí se haya guardado: actualizá la lista para revisar. Si sigue apareciendo acá, probá de nuevo.');
+        });
     }
 
     function mostrarError() {
