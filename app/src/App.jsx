@@ -5,7 +5,8 @@ import FormasDePago from './components/FormasDePago.jsx';
 import ListaDias from './components/ListaDias.jsx';
 import FormularioReserva from './components/FormularioReserva.jsx';
 import Confirmacion from './components/Confirmacion.jsx';
-import { getAvailableSlots, bookSlot } from './lib/api.js';
+import EntregaSinTurno from './components/EntregaSinTurno.jsx';
+import { getAvailableSlots, bookSlot, getEntregaSinTurnoInfo } from './lib/api.js';
 
 export default function App() {
   const [estado, setEstado] = useState('cargando');
@@ -14,10 +15,16 @@ export default function App() {
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [resultado, setResultado] = useState(null);
+  const [infoEntrega, setInfoEntrega] = useState(null);
   const tardandoTimer = useRef(null);
 
   useEffect(() => {
     cargarDisponibilidad();
+    // Independiente de la carga de turnos: si falla o tarda no afecta la
+    // página principal (ver getEntregaSinTurnoInfo, nunca tira error).
+    getEntregaSinTurnoInfo().then((info) => {
+      if (info.disponible) setInfoEntrega(info);
+    });
     return () => clearTimeout(tardandoTimer.current);
   }, []);
 
@@ -93,6 +100,8 @@ export default function App() {
         {slotSeleccionado && (
           <FormularioReserva enviando={enviando} mensaje={mensaje} onSubmit={confirmarTurno} />
         )}
+
+        {!slotSeleccionado && infoEntrega && <EntregaSinTurno info={infoEntrega} />}
       </div>
     </>
   );

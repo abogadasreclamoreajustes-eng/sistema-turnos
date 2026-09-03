@@ -101,6 +101,31 @@ const MENSAJE_OCUPADO_TRAS_FALLO_RED =
 const MENSAJE_SIN_CONFIRMACION =
   'No pudimos confirmar la respuesta del servidor. Antes de intentar de nuevo, revisá tu email: si la reserva se guardó igual, te va a llegar una confirmación automática.';
 
+// Entrega sin turno: solo se ofrece para el próximo miércoles habilitado,
+// y solo si ese día ya tiene una consulta asignada (mismo criterio que
+// habilita el día para consultas). No es crítico como los turnos -- si
+// falla, simplemente no se muestra la opción en vez de romper la página.
+export async function getEntregaSinTurnoInfo() {
+  try {
+    const res = await fetchConTimeout(`${BASE_URL}?api=entrega_info`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || 'No se pudo cargar.');
+    return data;
+  } catch (err) {
+    return { ok: false, disponible: false };
+  }
+}
+
+export async function registrarEntregaSinTurno(payload) {
+  const res = await fetchConTimeout(`${BASE_URL}?api=entrega_registrar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }, BOOK_TIMEOUT_MS);
+  return res.json();
+}
+
 export async function bookSlot(payload) {
   let huboFalloDeRed = false;
 
