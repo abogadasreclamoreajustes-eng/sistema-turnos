@@ -15,6 +15,9 @@
       --gris: #6b6b6b;
       --verde: #3f8f5f;
       --rojo: #b03434;
+      --ambar-bg: #FBF1D6;
+      --ambar-borde: #E3C878;
+      --ambar-texto: #8A6A1F;
     }
     * { box-sizing: border-box; }
     body {
@@ -47,6 +50,21 @@
       flex-shrink: 0;
     }
     button.actualizar:hover { background: rgba(75,46,131,0.06); }
+
+    .seccion { margin-top: 36px; }
+    .seccion-titulo {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--gris);
+      margin: 0 0 14px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .seccion-titulo.entregas { color: var(--ambar-texto); }
+
     .turno-card {
       background: var(--blanco);
       border: 1px solid rgba(0,0,0,0.08);
@@ -59,6 +77,7 @@
       gap: 16px;
       flex-wrap: wrap;
     }
+    .entrega-card { border: 1px solid var(--ambar-borde); background: #FFFCF5; }
     .turno-info { flex: 1; min-width: 220px; }
     .turno-fecha { font-weight: 700; font-size: 14px; color: var(--negro); }
     .turno-detalle { font-size: 13px; color: var(--gris); margin-top: 4px; line-height: 1.5; }
@@ -75,13 +94,42 @@
     }
     .badge-reservado { background: rgba(196,181,213,0.4); color: var(--violeta); }
     .badge-confirmada { background: rgba(63,143,95,0.15); color: var(--verde); }
-    .acciones { display: flex; gap: 8px; flex-shrink: 0; }
+    .badge-pendiente { background: rgba(227,200,120,0.35); color: var(--ambar-texto); }
+    .badge-realizada { background: rgba(63,143,95,0.15); color: var(--verde); }
+    .badge-norealizada { background: rgba(176,52,52,0.12); color: var(--rojo); }
+    .acciones { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
     button.btn { font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 9px 14px; border: none; cursor: pointer; white-space: nowrap; }
     .btn-confirmar { background: var(--violeta); color: var(--blanco); }
     .btn-confirmar:disabled { opacity: 0.5; cursor: default; }
     .btn-liberar { background: var(--blanco); color: var(--rojo); border: 1px solid rgba(176,52,52,0.3); }
-    .cargando, .vacio { text-align: center; color: var(--gris); padding: 48px 0; font-size: 14px; }
+    .btn-ambar { background: var(--blanco); color: var(--ambar-texto); border: 1px solid var(--ambar-borde); }
+    .btn-ambar-lleno { background: var(--ambar-texto); color: var(--blanco); }
+    .btn-chico { padding: 7px 10px; font-size: 11.5px; }
+    .cargando, .vacio { text-align: center; color: var(--gris); padding: 32px 0; font-size: 14px; }
     .error-acceso { text-align: center; color: var(--rojo); padding: 60px 20px; font-size: 14px; }
+
+    .form-agregar {
+      background: var(--blanco);
+      border: 1px dashed var(--ambar-borde);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .form-agregar.visible { display: block; }
+    .form-agregar label { display: block; font-size: 12px; font-weight: 600; color: var(--gris); margin: 10px 0 4px; }
+    .form-agregar input, .form-agregar select {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13.5px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.15);
+    }
+    .form-agregar .fila-botones { margin-top: 14px; display: flex; gap: 8px; }
+
+    .editar-motivo-fila { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+    .editar-motivo-fila select { font-family: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.15); }
   </style>
 </head>
 <body>
@@ -89,12 +137,42 @@
     <div class="encabezado">
       <div>
         <h1>Turnos presenciales · Rosario</h1>
-        <p class="sub">Marcá los turnos confirmados o liberá los que se cancelen.</p>
+        <p class="sub">Marcá los turnos confirmados, liberá los que se cancelen y gestioná las entregas sin turno.</p>
       </div>
-      <button class="actualizar" onclick="cargar()">↻ Actualizar</button>
+      <button class="actualizar" onclick="cargarTodo()">↻ Actualizar</button>
     </div>
-    <div id="lista">
-      <p class="cargando">Cargando turnos...</p>
+
+    <div class="seccion">
+      <p class="seccion-titulo">Consultas con turno</p>
+      <div id="lista">
+        <p class="cargando">Cargando turnos...</p>
+      </div>
+    </div>
+
+    <div class="seccion">
+      <p class="seccion-titulo entregas">
+        <span>Entregas sin turno</span>
+        <button class="btn btn-ambar btn-chico" onclick="toggleFormAgregar()">+ Agregar entrega</button>
+      </p>
+
+      <div class="form-agregar" id="form-agregar">
+        <label>Miércoles</label>
+        <select id="entrega-fecha"></select>
+        <label>Nombre</label>
+        <input type="text" id="entrega-nombre" placeholder="Nombre de la persona">
+        <label>Teléfono (opcional)</label>
+        <input type="text" id="entrega-telefono" placeholder="Teléfono">
+        <label>Motivo</label>
+        <select id="entrega-motivo"></select>
+        <div class="fila-botones">
+          <button class="btn btn-ambar-lleno" onclick="agregarEntrega()">Guardar</button>
+          <button class="btn btn-liberar" onclick="toggleFormAgregar()">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="lista-entregas">
+        <p class="cargando">Cargando entregas...</p>
+      </div>
     </div>
   </div>
 
@@ -107,20 +185,15 @@
     // que ya hace la página pública de turnos -- eso nunca falló.
     const BASE_URL = 'https://script.google.com/macros/s/AKfycbzRjhskoznfYXFZ8sqXsyF7l9f2cE0e8QMfJa6zj8X8R5ZWpFlRtzmy9mBmfQmiSrDPQA/exec';
     const TOKEN = '03f0fa645faa4c9a95e05a44';
-    // Leer la lista es una simple lectura de planilla: rápido, así que vale
+    // Leer listas es una simple lectura de planilla: rápido, así que vale
     // la pena reintentar seguido con un timeout corto.
     const TIMEOUT_MS = 8000;
     const MAX_INTENTOS = 6;
-    // Confirmar/Liberar además borran o tocan un evento de Calendar, que
-    // puede tardar mucho más (se vieron casos reales de 10-38s). Con un
-    // timeout corto acá, el navegador se rendía y reintentaba mientras el
-    // pedido anterior seguía corriendo en el servidor -- varios reintentos
-    // compitiendo por el mismo evento hacían que TODOS terminaran fallando
-    // (así quedó un turno cancelado por Virginia sin borrarse del Calendar
-    // real, sin que nadie se enterara). El backend ahora es idempotente
-    // (repetir la misma acción no hace nada raro si ya se había aplicado),
-    // así que acá alcanza con pocos reintentos pero con mucho más margen
-    // de tiempo cada uno.
+    // Confirmar/Liberar/agregar-entrega además tocan Calendar o son
+    // acciones que no queremos duplicar por reintentos agresivos: más
+    // margen de tiempo por intento, pero menos intentos. El backend es
+    // idempotente para las que tocan Calendar, así que reintentar sigue
+    // siendo seguro si hiciera falta.
     const WRITE_TIMEOUT_MS = 45000;
     const WRITE_MAX_INTENTOS = 2;
 
@@ -152,6 +225,13 @@
       }
       throw ultimoError;
     }
+
+    function cargarTodo() {
+      cargar();
+      cargarEntregas();
+    }
+
+    // --- Consultas con turno ---
 
     function cargar() {
       document.getElementById('lista').innerHTML = '<p class="cargando">Cargando turnos...</p>';
@@ -243,7 +323,212 @@
       document.getElementById('lista').innerHTML = '<p class="error-acceso">Ocurrió un error al cargar los turnos. Recargá la página.</p>';
     }
 
-    cargar();
+    // --- Entregas sin turno ---
+
+    const MOTIVOS_ENTREGA = [
+      'Entregar documentación',
+      'Retirar documentación',
+      'Entregar formularios',
+      'Retirar formularios',
+      'Realizar un pago',
+      'Entregar dinero',
+      'Otra gestión breve'
+    ];
+
+    function llenarSelectMotivos_(select, seleccionado) {
+      select.innerHTML = '';
+      MOTIVOS_ENTREGA.forEach(function (m) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        if (m === seleccionado) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function proximosMiercoles_(cantidad) {
+      const fechas = [];
+      const hoy = new Date();
+      const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      for (let d = new Date(base); fechas.length < cantidad; d.setDate(d.getDate() + 1)) {
+        if (d.getDay() === 3) { // 3 = miércoles
+          fechas.push(new Date(d));
+        }
+      }
+      return fechas;
+    }
+
+    function formatearFechaISO_(d) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function formatearFechaLegible_(d) {
+      return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+
+    function toggleFormAgregar() {
+      const form = document.getElementById('form-agregar');
+      const yaVisible = form.classList.contains('visible');
+      if (!yaVisible) {
+        const selectFecha = document.getElementById('entrega-fecha');
+        selectFecha.innerHTML = '';
+        proximosMiercoles_(8).forEach(function (d) {
+          const opt = document.createElement('option');
+          opt.value = formatearFechaISO_(d);
+          opt.textContent = formatearFechaLegible_(d);
+          selectFecha.appendChild(opt);
+        });
+        llenarSelectMotivos_(document.getElementById('entrega-motivo'));
+        document.getElementById('entrega-nombre').value = '';
+        document.getElementById('entrega-telefono').value = '';
+      }
+      form.classList.toggle('visible', !yaVisible);
+    }
+
+    function agregarEntrega() {
+      const fecha = document.getElementById('entrega-fecha').value;
+      const nombre = document.getElementById('entrega-nombre').value.trim();
+      const telefono = document.getElementById('entrega-telefono').value.trim();
+      const motivo = document.getElementById('entrega-motivo').value;
+      if (!nombre) { alert('Falta el nombre.'); return; }
+
+      fetchConReintentos_(`${BASE_URL}?api=admin_entrega_add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ fecha, nombre, telefono, motivo, token: TOKEN })
+      }, { timeoutMs: WRITE_TIMEOUT_MS, maxIntentos: WRITE_MAX_INTENTOS })
+        .then(function () {
+          toggleFormAgregar();
+          cargarEntregas();
+        })
+        .catch(function () {
+          alert('No se pudo agregar la entrega. Probá de nuevo.');
+        });
+    }
+
+    function cargarEntregas() {
+      document.getElementById('lista-entregas').innerHTML = '<p class="cargando">Cargando entregas...</p>';
+      fetchConReintentos_(`${BASE_URL}?api=admin_entregas_list&token=${encodeURIComponent(TOKEN)}`)
+        .then(mostrarEntregas)
+        .catch(function () {
+          document.getElementById('lista-entregas').innerHTML = '<p class="error-acceso">Ocurrió un error al cargar las entregas. Recargá la página.</p>';
+        });
+    }
+
+    function badgeEntregaClase_(estado) {
+      if (estado === 'Realizada') return 'badge-realizada';
+      if (estado === 'No realizada') return 'badge-norealizada';
+      return 'badge-pendiente';
+    }
+
+    function mostrarEntregas(resultado) {
+      const lista = document.getElementById('lista-entregas');
+      if (!resultado.ok) {
+        lista.innerHTML = '<p class="error-acceso">' + (resultado.message || 'Acceso no autorizado.') + '</p>';
+        return;
+      }
+      if (!resultado.entregas.length) {
+        lista.innerHTML = '<p class="vacio">No hay entregas sin turno registradas.</p>';
+        return;
+      }
+      lista.innerHTML = '';
+      resultado.entregas.forEach(function (e) {
+        const card = document.createElement('div');
+        card.className = 'turno-card entrega-card';
+
+        const info = document.createElement('div');
+        info.className = 'turno-info';
+        info.innerHTML =
+          '<span class="turno-fecha">' + e.fecha + ' · ' + e.franja +
+          '<span class="badge ' + badgeEntregaClase_(e.estado) + '">' + e.estado + '</span></span>' +
+          '<div class="turno-detalle">' + e.nombre + (e.telefono ? ' · ' + e.telefono : '') + '<br>' +
+          '<span class="motivo-texto">' + e.motivo + '</span></div>';
+        card.appendChild(info);
+
+        const acciones = document.createElement('div');
+        acciones.className = 'acciones';
+
+        const btnEditar = document.createElement('button');
+        btnEditar.className = 'btn btn-ambar btn-chico';
+        btnEditar.textContent = 'Editar motivo';
+        btnEditar.onclick = function () { mostrarEditorMotivo_(e, info, acciones); };
+        acciones.appendChild(btnEditar);
+
+        const btnRealizada = document.createElement('button');
+        btnRealizada.className = 'btn btn-ambar-lleno btn-chico';
+        btnRealizada.textContent = 'Marcar realizada';
+        btnRealizada.onclick = function () { marcarEntrega(e.id, 'Realizada', btnRealizada); };
+        acciones.appendChild(btnRealizada);
+
+        const btnNoRealizada = document.createElement('button');
+        btnNoRealizada.className = 'btn btn-ambar btn-chico';
+        btnNoRealizada.textContent = 'No realizada';
+        btnNoRealizada.onclick = function () { marcarEntrega(e.id, 'No realizada', btnNoRealizada); };
+        acciones.appendChild(btnNoRealizada);
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.className = 'btn btn-liberar btn-chico';
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.onclick = function () {
+          if (!confirm('¿Cancelar la entrega de ' + e.nombre + '?')) return;
+          marcarEntrega(e.id, 'Cancelada', btnCancelar);
+        };
+        acciones.appendChild(btnCancelar);
+
+        card.appendChild(acciones);
+        lista.appendChild(card);
+      });
+    }
+
+    function mostrarEditorMotivo_(entrega, info, acciones) {
+      const fila = document.createElement('div');
+      fila.className = 'editar-motivo-fila';
+      const select = document.createElement('select');
+      llenarSelectMotivos_(select, entrega.motivo);
+      const btnGuardar = document.createElement('button');
+      btnGuardar.className = 'btn btn-ambar-lleno btn-chico';
+      btnGuardar.textContent = 'Guardar';
+      btnGuardar.onclick = function () {
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+        fetchConReintentos_(`${BASE_URL}?api=admin_entrega_motivo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ id: entrega.id, motivo: select.value, token: TOKEN })
+        }, { timeoutMs: WRITE_TIMEOUT_MS, maxIntentos: WRITE_MAX_INTENTOS })
+          .then(function () { cargarEntregas(); })
+          .catch(function () {
+            alert('No se pudo guardar el motivo. Probá de nuevo.');
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar';
+          });
+      };
+      fila.appendChild(select);
+      fila.appendChild(btnGuardar);
+      info.appendChild(fila);
+    }
+
+    function marcarEntrega(id, estado, btn) {
+      btn.disabled = true;
+      const textoOriginal = btn.textContent;
+      btn.textContent = 'Guardando...';
+      fetchConReintentos_(`${BASE_URL}?api=admin_entrega_estado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ id, estado, token: TOKEN })
+      }, { timeoutMs: WRITE_TIMEOUT_MS, maxIntentos: WRITE_MAX_INTENTOS })
+        .then(function () { cargarEntregas(); })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+          alert('No se pudo guardar el cambio. Probá de nuevo -- si ya se había aplicado, puede que sí se haya guardado: actualizá la lista para revisar.');
+        });
+    }
+
+    cargarTodo();
   </script>
 </body>
 </html>
